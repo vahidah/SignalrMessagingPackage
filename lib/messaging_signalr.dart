@@ -13,9 +13,9 @@ class Chat {
 
   ChatType type;
   List<Message> messages = [];
-  String chatId;// group name for groups and id of contact for private chats
+  String chatId; // group name for groups and id of contact for private chats
   String? image;
-  String? userName;//this is just for private chat
+  String? userName; //this is just for private chat
   //todo may this is good idea to separate this two class check it later
 }
 
@@ -36,36 +36,36 @@ class Message {
 }
 
 class SignalRMessaging {
-
-  static void init({required String serverAddress, required String firebaseToken, required bool haveImage, required Function eventCall}){
-    instance.connection = HubConnectionBuilder()
+  static void init(
+      {required String serverAddress,
+      required String firebaseToken,
+      required Function eventCall}) {
+    _instance.connection = HubConnectionBuilder()
         .withUrl(
-        serverAddress,
-        HttpConnectionOptions(
-          client: IOClient(HttpClient()
-            ..badCertificateCallback = (x, y, z) => true),
-          //todo remove bad certificate and and check reconnection
-          logging: (level, message) => debugPrint(message),
-        ))
+            serverAddress,
+            HttpConnectionOptions(
+              client: IOClient(HttpClient()..badCertificateCallback = (x, y, z) => true),
+              //todo remove bad certificate and and check reconnection
+              logging: (level, message) => debugPrint(message),
+            ))
         .build();
-    instance.haveImage = haveImage;
-    instance.fireBaseToken = firebaseToken;
-    instance.callInReceiveNewMessage = eventCall;
-    instance.defineSignalrFunctions();
-    instance.connection.start();
+    _instance.fireBaseToken = firebaseToken;
+    _instance.callInReceiveNewMessage = eventCall;
+    _instance.defineSignalrFunctions();
+    _instance.connection.start();
   }
 
   List<Chat> chats = [];
 
   int myId = -1;
   String? fireBaseToken;
-  bool? haveImage;
   String? userName;
   File? image;
 
   Function? callInReceiveNewMessage;
 
   Chat? selectedChat;
+  //todo make them private
 
   void setSelectedChat(String chatKey) {
     selectedChat = chats.firstWhere((element) {
@@ -76,27 +76,27 @@ class SignalRMessaging {
 
   SignalRMessaging._();
 
-  static final SignalRMessaging instance = SignalRMessaging._();
+  static final SignalRMessaging _instance = SignalRMessaging._();
 
+  factory SignalRMessaging() => _instance;
 
   late final HubConnection connection;
 
   //call server functions
 
 
-  Future<void> sendMessage({required bool privateChat, required String message}) async{
+
+  Future<void> sendMessage({required bool privateChat, required String message}) async {
     if (privateChat) {
-      selectedChat!.messages.add(
-          Message(sender: myId, text: message, senderUserName: userName!));
-      connection.invoke(
-          'sendMessage', args: [int.parse(selectedChat!.chatId), message, false]);
+      selectedChat!.messages.add(Message(sender: myId, text: message, senderUserName: userName!));
+      connection.invoke('sendMessage', args: [int.parse(selectedChat!.chatId), message, false]);
     } else {
       connection.invoke('SendMessageToGroup', args: [selectedChat!.chatId, myId, message]);
     }
     callInReceiveNewMessage!();
   }
 
-
+  ///crete group [myId]
   void createGroup({required String newGroupName}) {
     if (!chats.any((element) => element.chatId == newGroupName)) {
       chats.add(Chat(type: ChatType.group, chatId: newGroupName, messages: []));
@@ -105,73 +105,95 @@ class SignalRMessaging {
     }
   }
 
-  Future<void> sendContactName({required File image, required String userName }) async {
-    Dio dio = Dio();
-    //todo make structure for package and move http request from here and check exceptions
-    // (dio.httpClientAdapter as DefaultHttpClientAdapter).onHttpClientCreate = (HttpClient client) {
-    //   client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-    //   return client;
-    // };
-    this.image = image;
-    FormData map = FormData.fromMap(
-        {"file": await MultipartFile.fromFile(image.path, filename: image.path
-            .split('/')
-            .last), "id": myId});
+  ///[image] must be set null when you set [haveImage] null otherwise you have to provide image
+  Future<void> sendContactName({File? image, required String userName}) async {
 
-    debugPrint("dio send request");
-    final response = await dio
-        .post("http://10.0.2.2:5003/api/Image",
-        data: map,
-        options: Options(
-          sendTimeout: 2000,
-          receiveTimeout: 2000,
-        ));
+    try {
+      if(image != null) {
+        BaseOptions options = BaseOptions(
+            receiveDataWhenStatusError: true,
+            connectTimeout: 5 * 1000, // 60 seconds
+            receiveTimeout: 5 * 1000 // 60 seconds
+        );
 
-    debugPrint("status code is ${response.statusCode}");
+        Dio dio = Dio(options);
+        //todo make structure for package and move http request from here and check exceptions
+        // (dio.httpClientAdapter as DefaultHttpClientAdapter).onHttpClientCreate = (HttpClient client) {
+        //   client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+        //   return client;
+        // };
+        this.image = image;
+        FormData map = FormData.fromMap(
+            {"file": await MultipartFile.fromFile(image.path, filename: image.path
+                .split('/')
+                .last), "id": myId});
 
-    if (response.statusCode == 200) {
-      debugPrint("successfully upload image");
-    } else {
-      debugPrint("upload image failed response from server gotten");
+        debugPrint("dio send request");
+        final response = await dio.post("http://10.0.2.2:5003/api/Image",
+            data: map);
+
+        debugPrint("status code is ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          debugPrint("successfully upload image");
+        } else {
+          debugPrint("upload image failed response from server gotten");
+        }
+      }
+    } catch (e, t) {
+      debugPrint("upload image failed");
+      debugPrint(e.toString());
+      rethrow;
+    }finally{
+      debugPrint("we cant catch these piece of code?");
+      this.userName = userName;
+      debugPrint("sending user name $userName}");
+      try {
+        connection.invoke('ReceiveUserName', args: [this.userName, myId]);
+      } catch (e, t) {
+        debugPrint("signalrConnection failed");
+      }
     }
 
-    debugPrint("before upload image");
-    debugPrint("after upload image");
-    this.userName = userName;
-    debugPrint("sending user name $userName}");
-    connection.invoke('ReceiveUserName', args: [this.userName, myId]);
 
-    // signalRMessaging.setUserName(userNameIn)
   }
 
   void sendFirstMessage(int contactId, String firstMessage) async {
     String? base64Image;
 
-    http.Response response = await http.post(
-      Uri.parse(
-        "${"http://10.0.2.2:5003/api/Image"}/$contactId",
-      ),
-    );
-
-    if (response.statusCode == 200) {
-      base64Image = base64.encode(response.bodyBytes);
-    } else {
-      debugPrint("get image failed");
+    debugPrint("package: in sendFirstMessage 1");
+    try {
+      http.Response response = await http.post(
+        Uri.parse(
+          "${"http://10.0.2.2:5003/api/Image"}/$contactId",
+        ),
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        base64Image = base64.encode(response.bodyBytes);
+      } else {
+        debugPrint("get image failed");
+      }
+    }catch(e){
+      debugPrint("what happened? does it throw exception");
     }
+    debugPrint("package: in sendFirstMessage 2");
+
+
+
+    debugPrint("package: in sendFirstMessage 3");
+
 
     chats.insert(
         0,
         Chat(
             type: ChatType.contact,
             chatId: contactId.toString(),
-            messages: [
-              Message(sender: myId, text: firstMessage, senderUserName: userName!)
-            ],
+            messages: [Message(sender: myId, text: firstMessage, senderUserName: userName!)],
             image: base64Image));
-    connection.invoke('sendMessage',
-        args: [contactId, firstMessage, true]);
+    //todo handle with try catch
+    connection.invoke('sendMessage', args: [contactId, firstMessage, true]);
 
-    debugPrint("newContactController 2");
+    debugPrint("package: in sendFirstMessage 4");
   }
 
   //call server functions end
@@ -188,8 +210,8 @@ class SignalRMessaging {
         chats.insert(0, chats[targetIndex]);
         chats.removeAt(targetIndex + 1);
       } else {
-        debugPrint("new message received 4");
-        if (haveImage!) {
+        try {
+          debugPrint("new message received 4");
           debugPrint("send request to get image");
           Map<String, String> requestHeaders = {
             "Connection": "keep-alive",
@@ -198,28 +220,36 @@ class SignalRMessaging {
               Uri.parse(
                 "http://10.0.2.2:5003/api/Image/${message![0]}",
               ),
-              headers: requestHeaders);
-          debugPrint("image received");
-          base64Image = base64.encode(response.bodyBytes);
-        }
+              headers: requestHeaders).timeout(const Duration(seconds: 5));
+          if(response.statusCode == 200){
+            debugPrint("package: image received");
+            base64Image = base64.encode(response.bodyBytes);
+          }else{
+            debugPrint("package: user have no image");
+          }
 
-        debugPrint("image received");
-        chats.insert(
-            0,
-            Chat(
-                type: ChatType.contact,
-                chatId: message![0].toString(),
-                messages: [
-                  Message(
-                    sender: message[0],
-                    text: message[1],
-                    senderUserName: message[2],
-                  )
-                ],
-                userName: message[2],
-                image: base64Image));
+        }catch (e){
+          debugPrint("package: user have no image");
+          debugPrint(e.toString());
+        }finally{
+          debugPrint("package: new message received 5");
+          chats.insert(
+              0,
+              Chat(
+                  type: ChatType.contact,
+                  chatId: message![0].toString(),
+                  messages: [
+                    Message(
+                      sender: message[0],
+                      text: message[1],
+                      senderUserName: message[2],
+                    )
+                  ],
+                  userName: message[2],
+                  image: base64Image));
+        }
       }
-      debugPrint("new message received 5");
+      debugPrint("new message received 6");
       callInReceiveNewMessage!();
 
       debugPrint("new message received from ${message[0]}");
