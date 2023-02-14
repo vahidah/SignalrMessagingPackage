@@ -1,6 +1,6 @@
 name: messaging_signalr
 description: flutter package do messaging via signalr.
-version: 0.0.1
+version: 0.0.1-dev
 homepage: https://github.com/vahidah/SignalrMessagingPackage
 environment:
   sdk: '>=2.19.0-406.0.dev <3.0.0'

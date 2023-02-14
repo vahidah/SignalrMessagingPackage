@@ -35,44 +35,9 @@ class Message {
   DateTime? date;
 }
 
+
+
 class SignalRMessaging {
-  static void init(
-      {required String serverAddress,
-      required String firebaseToken,
-      required Function eventCall}) {
-    _instance.connection = HubConnectionBuilder()
-        .withUrl(
-            serverAddress,
-            HttpConnectionOptions(
-              client: IOClient(HttpClient()..badCertificateCallback = (x, y, z) => true),
-              //todo remove bad certificate and and check reconnection
-              logging: (level, message) => debugPrint(message),
-            ))
-        .build();
-    _instance.fireBaseToken = firebaseToken;
-    _instance.callInReceiveNewMessage = eventCall;
-    _instance.defineSignalrFunctions();
-    _instance.connection.start();
-  }
-
-  List<Chat> chats = [];
-
-  int myId = -1;
-  String? fireBaseToken;
-  String? userName;
-  File? image;
-
-  Function? callInReceiveNewMessage;
-
-  Chat? selectedChat;
-  //todo make them private
-
-  void setSelectedChat(String chatKey) {
-    selectedChat = chats.firstWhere((element) {
-      debugPrint("chatkey is : chatKey and element key is : ${element.chatId}");
-      return element.chatId == chatKey;
-    });
-  }
 
   SignalRMessaging._();
 
@@ -82,18 +47,69 @@ class SignalRMessaging {
 
   late final HubConnection connection;
 
-  //call server functions
+  List<Chat> chats = [];
+
+  int myId = -1;
+  String? fireBaseToken;
+  String? userName;
+  File? image;
+  List<int>? delayInterval;
+
+  Function? callInReceiveNewMessage;
+  Function? onSendMessage;
+
+  // Chat? selectedChat;
+  //todo make them private
 
 
 
-  Future<void> sendMessage({required bool privateChat, required String message}) async {
-    if (privateChat) {
-      selectedChat!.messages.add(Message(sender: myId, text: message, senderUserName: userName!));
-      connection.invoke('sendMessage', args: [int.parse(selectedChat!.chatId), message, false]);
-    } else {
-      connection.invoke('SendMessageToGroup', args: [selectedChat!.chatId, myId, message]);
+  static void init(
+      {required String serverAddress,
+      required String firebaseToken,
+      required Function eventCall,
+      required Function onSendMessage}) {
+    _instance.delayInterval = [];
+    for(int i = 0; i < 1000; i++){
+      _instance.delayInterval?.add(1000);
     }
-    callInReceiveNewMessage!();
+
+
+    _instance.connection = HubConnectionBuilder()
+        .withUrl(
+            serverAddress,
+            HttpConnectionOptions(
+              client: IOClient(HttpClient()..badCertificateCallback = (x, y, z) => true),
+              //todo remove bad certificate and and check reconnection
+              logging: (level, message) => debugPrint(message),
+            )).withAutomaticReconnect(_instance.delayInterval)
+        .build();
+    _instance.onSendMessage = onSendMessage;
+    _instance.fireBaseToken = firebaseToken;
+    _instance.callInReceiveNewMessage = eventCall;
+    _instance.defineSignalrFunctions();
+    _instance.connection.start();
+
+  }
+
+
+
+
+
+  Future<void> sendMessage({required bool privateChat, required String message, required chatId}) async {
+
+
+    Chat targetChat = chats.singleWhere((element) => element.chatId == chatId);
+
+
+    if (privateChat) {
+
+      targetChat.messages.add(Message(sender: myId, text: message, senderUserName: userName!));
+      connection.invoke('sendMessage', args: [int.parse(chatId), message, false]);
+    } else {
+      //todo he himself receive message from remote server? i think it should change!
+      connection.invoke('SendMessageToGroup', args: [ chatId, myId, message]);
+    }
+    onSendMessage!();
   }
 
   ///crete group [myId]
@@ -290,5 +306,11 @@ class SignalRMessaging {
       debugPrint("sending token");
       callInReceiveNewMessage!();
     });
+
+    // connection.on('CheckNewClient',(message){
+    //   if (_instance.myId != -1){
+    //     connection.invoke('getReconnectedUserId', args: []);
+    //   }
+    // });
   }
 }
