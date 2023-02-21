@@ -57,6 +57,9 @@ class SignalRMessaging {
 
   Function? callInReceiveNewMessage;
   Function? onSendMessage;
+  Function? onGetContactInfo;
+  Function? onCreateGroup;
+  Function? onGetContactInfoCanceled;
 
   // Chat? selectedChat;
   //todo make them private
@@ -67,7 +70,11 @@ class SignalRMessaging {
       {required String serverAddress,
       required String firebaseToken,
       required Function eventCall,
-      required Function onSendMessage}) {
+      required Function onSendMessage,
+      required Function onGetContactInfo,
+      required Function onCreateGroup,
+      required Function onGetContactInfoCanceled,
+      }) {
     _instance.delayInterval = [];
     for(int i = 0; i < 1000; i++){
       _instance.delayInterval?.add(1000);
@@ -86,8 +93,12 @@ class SignalRMessaging {
     _instance.onSendMessage = onSendMessage;
     _instance.fireBaseToken = firebaseToken;
     _instance.callInReceiveNewMessage = eventCall;
+    _instance.onCreateGroup = onCreateGroup;
+    _instance.onGetContactInfo = onGetContactInfo;
     _instance.defineSignalrFunctions();
+    _instance.onGetContactInfoCanceled = onGetContactInfoCanceled;
     _instance.connection.start();
+
 
   }
 
@@ -104,7 +115,7 @@ class SignalRMessaging {
     if (privateChat) {
 
       targetChat.messages.add(Message(sender: myId, text: message, senderUserName: userName!));
-      connection.invoke('sendMessage', args: [int.parse(chatId), message, false]);
+      connection.invoke('sendMessage', args: [int.parse(chatId), message]);
     } else {
       //todo he himself receive message from remote server? i think it should change!
       connection.invoke('SendMessageToGroup', args: [ chatId, myId, message]);
@@ -113,15 +124,14 @@ class SignalRMessaging {
   }
 
   ///crete group [myId]
-  void createGroup({required String newGroupName}) {
+ Future<void> createGroup({required String newGroupName}) async{
     if (!chats.any((element) => element.chatId == newGroupName)) {
       chats.add(Chat(type: ChatType.group, chatId: newGroupName, messages: []));
       connection.invoke('AddToGroup', args: [newGroupName]);
-      callInReceiveNewMessage!();
+      onCreateGroup!();
     }
   }
 
-  ///[image] must be set null when you set [haveImage] null otherwise you have to provide image
   Future<void> sendContactName({File? image, required String userName}) async {
 
     try {
@@ -174,42 +184,18 @@ class SignalRMessaging {
 
   }
 
-  void sendFirstMessage(int contactId, String firstMessage) async {
-    String? base64Image;
+  Future<void> addNewContact({required int contactId, String? firstMessage}) async {
+
+    if(!chats.any((element) => element.chatId == contactId.toString())) {
 
     debugPrint("package: in sendFirstMessage 1");
-    try {
-      http.Response response = await http.post(
-        Uri.parse(
-          "${"http://10.0.2.2:5003/api/Image"}/$contactId",
-        ),
-      ).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
-        base64Image = base64.encode(response.bodyBytes);
-      } else {
-        debugPrint("get image failed");
-      }
-    }catch(e){
-      debugPrint("what happened? does it throw exception");
+    connection.invoke('sendClientInfo', args: [contactId]);
+
     }
-    debugPrint("package: in sendFirstMessage 2");
+    else{
+      onGetContactInfoCanceled!("this user already is your contact");
+    }
 
-
-
-    debugPrint("package: in sendFirstMessage 3");
-
-
-    chats.insert(
-        0,
-        Chat(
-            type: ChatType.contact,
-            chatId: contactId.toString(),
-            messages: [Message(sender: myId, text: firstMessage, senderUserName: userName!)],
-            image: base64Image));
-    //todo handle with try catch
-    connection.invoke('sendMessage', args: [contactId, firstMessage, true]);
-
-    debugPrint("package: in sendFirstMessage 4");
   }
 
   //call server functions end
@@ -271,13 +257,54 @@ class SignalRMessaging {
       debugPrint("new message received from ${message[0]}");
       debugPrint(message[1]);
     });
-    connection.on('receiveUserName', (message) {
-      debugPrint("user name is : ${message![1]}");
-      int targetChat = chats.indexWhere((element) => element.chatId == message[0].toString());
-      chats[targetChat].userName = message[1];
-      debugPrint("receive user name");
-      callInReceiveNewMessage!();
+
+
+
+    ///receive client information
+    connection.on('receiveClientInfo', (message) async{
+      debugPrint("package: in receiveUserName 1");
+
+      String userId = message![0].toString();
+      String userName = message[1];
+
+      String? base64Image;
+
+
+      if(message[0] == -1){
+        debugPrint("package: there is no contact with this id");
+        onGetContactInfoCanceled!("there is no contact with this id");
+        return;
+      }
+      debugPrint("package: in receiveUserName 2");
+      try {
+        http.Response response = await http.post(
+          Uri.parse(
+            "${"http://10.0.2.2:5003/api/Image"}/$userId",
+          ),
+        ).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200) {
+          base64Image = base64.encode(response.bodyBytes);
+        } else {
+          debugPrint("get image failed");
+        }
+      }catch(e){
+        debugPrint("getting user image failed");
+      }
+      chats.insert(
+          0,
+          Chat(
+              type: ChatType.contact,
+              chatId: userId,
+              messages:[],
+              image: base64Image));
+      debugPrint("user name is : $userName");
+      int targetChat = chats.indexWhere((element) => element.chatId == userId);
+      chats[targetChat].userName = userName;
+      debugPrint("package:receive user name");
+      onGetContactInfo!();
     });
+
+
 
     connection.on('GroupMessage', (message) {
       debugPrint("new message for group ${message![0]} form user ${message[1]} received, message is ${message[2]}");
