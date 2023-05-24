@@ -1,0 +1,131 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "4:637314664526053407",
+      "lastPropertyId": "4:6429930105337795719",
+      "name": "Contact",
+      "properties": [
+        {
+          "id": "1:5645400157283071592",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:687687032383943316",
+          "name": "userName",
+          "type": 9
+        },
+        {
+          "id": "3:4059285666848700917",
+          "name": "imageType",
+          "type": 9
+        },
+        {
+          "id": "4:6429930105337795719",
+          "name": "phoneNumber",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:5545359217058353260",
+      "lastPropertyId": "7:5289127305880014439",
+      "name": "Message",
+      "properties": [
+        {
+          "id": "1:1815969240826369",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6288614738311781577",
+          "name": "receiverId",
+          "type": 9
+        },
+        {
+          "id": "4:3235977672677165811",
+          "name": "senderUserName",
+          "type": 9
+        },
+        {
+          "id": "5:4165485430459055895",
+          "name": "message",
+          "type": 9
+        },
+        {
+          "id": "6:5098686761668459152",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "7:5289127305880014439",
+          "name": "senderPhoneNumber",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "6:6907580500814388729",
+      "lastPropertyId": "4:5710658985835394472",
+      "name": "Group",
+      "properties": [
+        {
+          "id": "1:6901990270631233171",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3791252356577755206",
+          "name": "groupID",
+          "type": 9
+        },
+        {
+          "id": "3:3702577734483323669",
+          "name": "groupName",
+          "type": 9
+        },
+        {
+          "id": "4:5710658985835394472",
+          "name": "imageType",
+          "type": 9
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "6:6907580500814388729",
+  "lastIndexId": "0:0",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [
+    1905105460055970584,
+    4326848862098983318,
+    5646975722548021592
+  ],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [
+    7997732721906611150,
+    1498064663591360504,
+    9165545013072988725,
+    4877729840467155073,
+    6758483133818294873,
+    585609381998393805,
+    6642736454832914930,
+    8087694414283662120,
+    6820143125403607510,
+    7668693127131540302,
+    7408033311899592472
+  ],
+  "retiredRelationUids": [],
+  "version": 1
+}
