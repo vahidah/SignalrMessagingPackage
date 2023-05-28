@@ -9,7 +9,7 @@ class Message {
   @Id()
   int id = 0;
 
-  String receiverId;
+  String receiverPhone;
 
   String senderPhoneNumber;
 
@@ -22,7 +22,7 @@ class Message {
 
   Message({
     required this.message,
-    required this.receiverId,
+    required this.receiverPhone,
     required this.senderPhoneNumber,
     required this.senderUserName,
     required this.date

@@ -9,7 +9,7 @@ import 'package:tuple/tuple.dart';
 
 import 'constants.dart';
 
-Future<Tuple2<String?, File?>?> getImageRequest(String userPhone) async {
+Future<File?> getImageRequest({required String userPhone}) async {
   File? imageFile;
 
   try {
@@ -23,15 +23,6 @@ Future<Tuple2<String?, File?>?> getImageRequest(String userPhone) async {
       headers: {"Content-Type": "application/json"},
       body: jsonBody,
     );
-    // var response = await http
-    //     .post(
-    //   Uri.parse(
-    //     "${ConstStrings.baseUrl}/api/Images/DownloadImage",
-    //   ),
-    //   headers: {"Content-Type": "application/json"},
-    //   body: jsonBody,
-    // )
-    //     .timeout(const Duration(seconds: 5));
 
     if (response.statusCode == 200) {
       String imageType = response.headers["content-type"]!.split('/')[1];
@@ -40,19 +31,9 @@ Future<Tuple2<String?, File?>?> getImageRequest(String userPhone) async {
       imageFile = File(path.join(directory!.path, "${userPhone}.${imageType}"));
       imageFile.writeAsBytes(response.bodyBytes);
 
-      return Tuple2(imageType, imageFile);
+      return imageFile;
     }
 
-    //   Dio dio = Dio();
-    //
-    //   dio.options.headers['content-Type'] = 'application/json';
-    //
-    //   final response = await dio.post("${ConstStrings.baseUrl}/api/Images/UploadImage", data: jsonBody);
-    //   if(response.statusCode == 200){
-    //
-    //     debugPrint("signalr-package: no problem with dio ${response.statusCode}");
-    //
-    // }
     else {
       debugPrint("signalr-package: ReceiveNewMessage user have no image response code ${response.statusCode}");
     }

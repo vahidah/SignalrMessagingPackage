@@ -1,6 +1,6 @@
 
 import 'package:objectbox/objectbox.dart';
-
+import 'dart:io';
 
 
 @Entity()
@@ -13,9 +13,10 @@ class Contact {
 
   String? phoneNumber;
 
-  String? imageType;
-
   Contact({required this.userName, required this.phoneNumber});
+
+  @Transient()
+  File? image;
 
 
 }

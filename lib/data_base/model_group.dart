@@ -13,9 +13,10 @@ class Group {
 
   String? groupName;
 
-  String? imageType;
-
   Group({required this.groupName, required this.groupID});
+
+  @Transient()
+  List<String> image = [];
 
 
 }

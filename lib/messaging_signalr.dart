@@ -1,6 +1,6 @@
 library messaging_signalr;
 
-import 'package:dio/dio.dart';
+import 'package:file/local.dart';
 import 'package:flutter/material.dart';
 import 'package:messaging_signalr/utils/constants.dart';
 import 'package:messaging_signalr/utils/http_requests.dart';
@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'package:glob/glob.dart';
 import 'package:signalr_core/signalr_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
@@ -23,19 +24,21 @@ import 'objectbox.g.dart';
 
 /// we have two type of chat private chat and group chat for group chat [name] is null
 class Chat {
-  Chat({required this.type, required this.chatId, required this.messages, this.image, required this.name});
+  Chat({required this.type, required this.chatId, required this.messages});
 
   ChatType type;
   List<Message> messages = [];
 
   /// the id of contact or group name based on [type]
   String chatId; // group name for groups and id of contact for private chats
-  File? image;
-
-  ///this is just for private chat
-  String name;
+  // File? image;
+  //
+  // ///this is just for private chat
+  // String name;
 //may this is good idea to separate this two class check it later
 }
+
+
 
 ///specify type of chat and used in [Chat] class
 enum ChatType {
@@ -43,10 +46,7 @@ enum ChatType {
   contact,
 }
 
-
 typedef OnTasksEnded = void Function(String message);
-
-
 
 ///this class manage all functionalities and data's
 class SignalRMessaging {
@@ -63,6 +63,9 @@ class SignalRMessaging {
   ///list of chats including private and group
   List<Chat> chats = [];
 
+  Map<String, Contact> contacts = <String, Contact>{};
+  Map<String, Group> groups = <String, Group>{};
+
   String? serverAddress;
 
   ///the token which app receive from firebase messaging package to receive notification
@@ -73,8 +76,7 @@ class SignalRMessaging {
   String? myPhoneNumber;
   String? myPassword;
 
-  File? image;
-
+  File? myImage;
 
   late ObjectBox _objectBox;
   late SharedPreferences sp;
@@ -124,25 +126,22 @@ class SignalRMessaging {
 
   ///this function have to called before using [SignalRMessaging] singleton class to initiate class
 
+  Future<void> init({
+    /// the address of signalr server
+    required String serverAddress,
 
-  Future<void> init(
-      {
-      /// the address of signalr server
-      required String serverAddress,
-
-      /// the fire base token receive from fire base messaging will be used to receive notification
-      required String firebaseToken,
-      required Function onSendMessage,
-      required Function onGetContactInfo,
-      required Function onReceiveNewMessage,
-      required OnTasksEnded onCreateGroup,
-      required OnTasksEnded onGetContactInfoCanceled,
-        required OnTasksEnded onFailure,
-        required Function onSignUp,
-        required Function onLogout,
-        required Function onLogin
-      }) async {
-
+    /// the fire base token receive from fire base messaging will be used to receive notification
+    required String firebaseToken,
+    required Function onSendMessage,
+    required Function onGetContactInfo,
+    required Function onReceiveNewMessage,
+    required OnTasksEnded onCreateGroup,
+    required OnTasksEnded onGetContactInfoCanceled,
+    required OnTasksEnded onFailure,
+    required Function onSignUp,
+    required Function onLogout,
+    required Function onLogin,
+  }) async {
     myFireBaseToken = firebaseToken;
 
     this.onSendMessage = onSendMessage;
@@ -165,8 +164,6 @@ class SignalRMessaging {
       delayInterval?.add(1000);
     }
 
-
-
     sp = await SharedPreferences.getInstance();
     _sharedPrefService = SharedPrefService(sp);
 
@@ -185,30 +182,40 @@ class SignalRMessaging {
 
     Directory? directory = await getExternalStorageDirectory();
 
-    for (var contact in contacts) {
+
+
+    for (Contact contact in contacts) {
       String contactPhone = contact.phoneNumber!;
 
-      final query =
-          (messageBox!.query(Message_.senderPhoneNumber.equals(contactPhone) | Message_.receiverId.equals(contactPhone))).build();
+      final query = (messageBox!
+              .query(Message_.senderPhoneNumber.equals(contactPhone) | Message_.receiverId.equals(contactPhone)))
+          .build();
 
-      File? imageFile;
 
-      debugPrint("signalr-package: image type is ${contact.imageType}");
-
-      if (contact.imageType != null) {
-        debugPrint("signalr-package: path is: ${path.join(directory!.path, "${contact.id}.${contact.imageType}")}");
-        imageFile = File(path.join(directory!.path, "${contact.phoneNumber}.${contact.imageType}"));
-      } else {
-        imageFile = null;
-      }
 
       final result = query.find();
 
       debugPrint("signalr-package: do we add something here?");
 
-      chats.add(
-          Chat(type: ChatType.contact, chatId: contactPhone, name: contact.userName!, messages: result, image: imageFile));
+      this.contacts.addAll({contact.phoneNumber!:contact});
+
+      chats.add(Chat(
+          type: ChatType.contact, chatId: contactPhone, messages: result));
     }
+    
+    directory!.list().listen((data) {
+
+
+
+      String phoneNumber = data.path.split('.')[data.path.split('.').length-2].split('/').last;
+
+      this.contacts[phoneNumber]!.image = File(data.path);
+
+     // Chat? targetChat = chats.where((element) => element.chatId == phoneNumber).first ;
+     //
+     //  targetChat.image = File(data.path);
+
+    });
 
     for (Group group in groups) {
       final query = (messageBox!.query(Message_.receiverId.equals(group.groupID!))).build();
@@ -239,19 +246,17 @@ class SignalRMessaging {
     connection.onreconnected((connectionId) {});
 
     defineSignalrFunctions();
-    connection.start()?.then((value){
+    connection.start()?.then((value) {
       debugPrint("even called?");
     });
   }
 
   ///the function that invoke server side function to send message to a group or a contacts
   Future<void> sendMessage({required bool privateChat, required String message, required String chatId}) async {
-
-
     Message storeMessage = Message(
         message: message,
         senderPhoneNumber: myPhoneNumber!,
-        receiverId: chatId,
+        receiverPhone: chatId,
         date: DateTime.now(),
         senderUserName: myUserName!);
     debugPrint("signlar-package: checknull2");
@@ -263,14 +268,13 @@ class SignalRMessaging {
 
     targetChat.messages.add(Message(
         senderPhoneNumber: myPhoneNumber!,
-        receiverId: chatId,
+        receiverPhone: chatId,
         message: message,
         senderUserName: myUserName!,
         date: DateTime.now()));
 
     if (privateChat) {
-
-      connection.invoke('sendMessage', args: [myPhoneNumber ,chatId, message]);
+      connection.invoke('sendMessage', args: [myPhoneNumber, chatId, message]);
     } else {
       //todo he himself receive message from remote server? i think it should change!
       debugPrint("signalr-package:chat id is: $chatId");
@@ -294,46 +298,33 @@ class SignalRMessaging {
   }
 
   ///send user name to server and upload user image it has
-  Future<void> signUp({File? image, required String userName, required String phoneNumber, required String password}) async {
-
-
-    if(!connected){
-
+  Future<void> signUp(
+      {File? image, required String userName, required String phoneNumber, required String password}) async {
+    if (!connected) {
       onFailure!("you are not connected to server");
 
       return;
     }
-    if(image != null){
-      this.image = image;
-      Future(
-          ()async{
-           bool success =  await uploadImage(phoneNumber, image);
-           if(!success){
 
-           }
-          }
-      );
+    this.myImage = image;
 
+    try {
+      connection.invoke('signUp', args: [userName, phoneNumber, password, myFireBaseToken]);
+    } catch (e) {
+      // debugPrint("signalrConnection failed");
     }
 
+    myPhoneNumber = phoneNumber;
+    myPassword = password;
+    myUserName = userName;
 
-      try {
-
-          connection.invoke('signUp', args: [userName, phoneNumber, password, myFireBaseToken]);
-      } catch (e) {
-        // debugPrint("signalrConnection failed");
-      }
-
-      myPhoneNumber = phoneNumber;
-      myPassword = password;
-      myUserName = userName;
-
-
-      //todo its better to receive message from server that shows signup completed and then call this function
+    //todo its better to receive message from server that shows signup completed and then call this function
   }
 
   ///add new contact and gets its info
-  Future<void> addNewContact({required String contactPhoneNumber,}) async {
+  Future<void> addNewContact({
+    required String contactPhoneNumber,
+  }) async {
     debugPrint("signalr-package : add new contact");
     if (contactPhoneNumber == myPhoneNumber) {
       onGetContactInfoCanceled!("you can not create chat with your self");
@@ -345,16 +336,15 @@ class SignalRMessaging {
       onGetContactInfoCanceled!("this user already is your contact");
     }
   }
-  ///logout user and delete his data
-  void logout() async{
 
+  ///logout user and delete his data
+  void logout() async {
     ///the logout function should not called before
     messageBox!.removeAll();
     contactBox!.removeAll();
     groupBox!.removeAll();
 
     String temporaryPhone = myPhoneNumber!;
-
 
     _sharedPrefService.setString(SpKeys.phoneNumber, "null");
     _sharedPrefService.setString(SpKeys.password, "null");
@@ -365,49 +355,40 @@ class SignalRMessaging {
     myPhoneNumber = null;
 
     chats = [];
-    image = null;
+    myImage = null;
 
     connection.invoke('Logout', args: [temporaryPhone]);
 
     Directory? directory = await getExternalStorageDirectory();
 
-      //can directory be null?
+    //can directory be null?
     directory?.list(recursive: true).listen((file) {
-        file.deleteSync();
-      });
-
+      file.deleteSync();
+    });
 
     onLogout!();
-
   }
 
-  void login({required String phoneNumber,required String password,required String fireBaseToken}){
-
-
+  void login({required String phoneNumber, required String password, required String fireBaseToken}) {
     debugPrint("signalr-package connected value is ${connected}");
 
-    if(!connected){
-
+    if (!connected) {
       onFailure!("you are not connected to server");
 
       return;
     }
 
-
     myPhoneNumber = phoneNumber;
     myPassword = password;
     myFireBaseToken = fireBaseToken;
 
-    connection.invoke('Login', args: [phoneNumber ,password, fireBaseToken]);
-
-
+    connection.invoke('Login', args: [phoneNumber, password, fireBaseToken]);
   }
 
   ///use to get message between user and his contacts when he open app
   void getMessages(ChatType chatType) {
     for (Chat element in chats) {
-
-      if(element.type == chatType) {
+      if (element.type == chatType) {
         debugPrint("signalr-package: getMessages");
 
         if (element.type == ChatType.contact) {
@@ -419,33 +400,14 @@ class SignalRMessaging {
     }
   }
 
-  void getImages()async {
+  void getImages() async {
+    for (Chat element in chats) {
+      if (element.type == ChatType.contact) {
 
-    for(Chat element in chats){
-      if(element.type == ChatType.contact) {
+        getImage(element.chatId);
 
-        final result = await getImageRequest(element.chatId);
-        if(result != null) {
-
-          final query =
-          (contactBox!.query(Contact_.phoneNumber.equals(element.chatId))).build();
-
-          final queryResult = query.find();
-
-          queryResult.first.imageType = result.item1;
-
-          contactBox!.put(queryResult.first);
-
-          debugPrint("signalr-package: we got image");
-
-          element.image = result.item2;
-
-          onReceiveNewMessage!();
-
-        }
       }
     }
-
   }
 
   //call server functions end
@@ -458,7 +420,7 @@ class SignalRMessaging {
       final storeMessage = Message(
           message: message![1],
           senderPhoneNumber: message[0],
-          receiverId: myPhoneNumber!,
+          receiverPhone: myPhoneNumber!,
           date: DateTime.now(),
           senderUserName: message[2]);
       messageBox!.put(storeMessage);
@@ -475,24 +437,17 @@ class SignalRMessaging {
         Contact contact = Contact(phoneNumber: message[0], userName: message[2]);
 
 
-        final result = await getImageRequest(message[0]);
+        getImage(message[0]);
 
-
-        if(result != null){
-
-          contact.imageType = result.item1;
-          imageFile = result.item2;
-        }
-
-          contactBox!.put(contact);
-          chats.insert(
-              0,
-              Chat(
-                  type: ChatType.contact,
-                  chatId: message[0].toString(),
-                  messages: [storeMessage],
-                  name: message[2],
-                  image: imageFile));
+        contactBox!.put(contact);
+        chats.insert(
+            0,
+            Chat(
+                type: ChatType.contact,
+                chatId: message[0].toString(),
+                messages: [storeMessage],
+                name: message[2],
+                image: imageFile));
       }
       onReceiveNewMessage!();
     });
@@ -510,45 +465,14 @@ class SignalRMessaging {
       String userName = message[1];
       debugPrint("signalr-package : receive client info");
       File? imageFile;
-      final contact = Contact(userName: userName, phoneNumber: userPhone);
+      Contact contact = Contact(userName: userName, phoneNumber: userPhone);
 
-      debugPrint("signalr-package : receive client info1");
+      getImage(userPhone);
 
-      var reqBody = <String, dynamic>{"phoneNumber": userPhone};
 
-      debugPrint("signalr-package : receive client info2");
-      var jsonBody = json.encode(reqBody);
-      debugPrint("signalr-package : receive client info3");
-      try {
-        debugPrint("signalr-package: try block 1");
-        http.Response response = await http
-            .post(
-                Uri.parse(
-                  "$serverAddress/api/Images/DownloadImage",
-                ),
-                headers: {"Content-Type": "application/json"},
-                body: jsonBody);
 
-        if (response.statusCode == 200) {
-          String imageType = response.headers["content-type"]!.split('/')[1];
-          contact.imageType = imageType;
-          Directory? directory = await getExternalStorageDirectory();
-          debugPrint("signalr-package: path is: ${path.join(directory!.path, "$userPhone.$imageType")}");
-          imageFile = File(path.join(directory.path, "$userPhone.$imageType"));
-          imageFile.writeAsBytes(response.bodyBytes);
-
-          debugPrint("signalr-package:  headers are ${response.headers}");
-        } else {
-          debugPrint("signalr-package: try block 4");
-          debugPrint("signalr-package : getting user image failed. response code is :${response.statusCode}");
-        }
-      } catch (e) {
-        debugPrint("signalr-package: ${e.toString()}");
-        debugPrint("signalr-package:getting user image failed with exception");
-      }
       contactBox!.put(contact);
-      chats.insert(
-          0, Chat(type: ChatType.contact, chatId: userPhone, name: userName, messages: [], image: imageFile));
+      chats.insert(0, Chat(type: ChatType.contact, chatId: userPhone, name: userName, messages: [], image: imageFile));
 
       onGetContactInfo!();
     });
@@ -558,7 +482,7 @@ class SignalRMessaging {
       int targetIndex = chats.indexWhere((e) => e.chatId == message![0]);
       Message messageStore = Message(
           message: message![2],
-          receiverId: message[0],
+          receiverPhone: message[0],
           senderPhoneNumber: message[1],
           senderUserName: message[3],
           date: DateTime.now());
@@ -578,7 +502,7 @@ class SignalRMessaging {
       Chat targetChat = chats.firstWhere((element) => element.chatId == message![2]);
       Group group = Group(groupID: message![0], groupName: message[2]);
       groupBox!.put(group);
-      targetChat.chatId = message![0];
+      targetChat.chatId = message[0];
       if (message[1] == "joined") {
         onCreateGroup!("${message[0]} joined");
       } else {
@@ -587,32 +511,32 @@ class SignalRMessaging {
     });
 
     connection.on("signUpResult", (args) {
-
       debugPrint("signalr-package: signUpResult called");
 
-      if(args![0] == "failed"){
-
+      if (args![0] == "failed") {
         onFailure!(args[1]);
         myPhoneNumber = null;
         myPassword = null;
         myFireBaseToken = null;
+      } else {
+        Future(() async {
+          bool success = await uploadImage(myPhoneNumber!, myImage!);
+          if (!success) {
+            debugPrint("what the hell?");
+          }
+        });
 
-      }else{
         onSignUp!();
         _sharedPrefService.setString(SpKeys.username, myUserName!);
         _sharedPrefService.setString(SpKeys.password, myPassword!);
         _sharedPrefService.setString(SpKeys.phoneNumber, myPhoneNumber!);
       }
-
-
-
     });
 
     connection.on('LoginResult', (args) {
-
       debugPrint("signalr-package: in LoginResult");
 
-      if(args![0] == "failed"){
+      if (args![0] == "failed") {
         onFailure!(args[1]);
         myPhoneNumber = null;
         myPassword = null;
@@ -629,12 +553,9 @@ class SignalRMessaging {
       _sharedPrefService.setString(SpKeys.username, myUserName!);
 
       onLogin!();
-
-
     });
 
     connection.on('CheckNewClient', (message) {
-
       debugPrint("signalr-package: checkNewClient");
 
       connected = true;
@@ -649,7 +570,6 @@ class SignalRMessaging {
 
     ///receive info of Chats( whether private or group) previously added to contact by user
     connection.on('ReceiveChatsInfo', (message) {
-
       debugPrint("signalr-package: ReceiveChatsInfo $message");
 
       List ids = [];
@@ -664,20 +584,19 @@ class SignalRMessaging {
       for (int i = 0; i < ids.length; i++) {
         chats.add(Chat(type: type, chatId: ids[i], name: chatName[i], messages: []));
 
-        if(type == ChatType.contact){
+        if (type == ChatType.contact) {
           Contact newContact = Contact(userName: chatName[i], phoneNumber: ids[i]);
           contactBox!.put(newContact);
-        }else{
-          Group newGroup = Group(groupName: chatName[i],groupID: ids[i]);
+        } else {
+          Group newGroup = Group(groupName: chatName[i], groupID: ids[i]);
           groupBox!.put(newGroup);
         }
       }
       onReceiveNewMessage!();
       getMessages(type);
-      if(type == ChatType.contact){
+      if (type == ChatType.contact) {
         getImages();
       }
-
     });
 
     ///receive old message from server
@@ -687,7 +606,6 @@ class SignalRMessaging {
       debugPrint("signalr-package : receiveMessages ${args![1]}");
 
       for (int i = 0; i < args![1].length; i++) {
-
         debugPrint("signalr-package : receiveMessages in loop");
 
         var newFormatDate = args[1][i]['date'].replaceAll("T", ' ');
@@ -696,7 +614,7 @@ class SignalRMessaging {
 
         Message newMessage = Message(
             senderPhoneNumber: args[1][i]['senderId'],
-            receiverId: args[1][i]['receiverId'],
+            receiverPhone: args[1][i]['receiverId'],
             message: args[1][i]['message'],
             senderUserName: args[2] == "group" ? args[3][i] : chat.name,
             date: messageDate);
@@ -711,4 +629,18 @@ class SignalRMessaging {
       //connection.invoke('receiveRest');
     });
   }
+  ///this function get image and fina related chat then assign image to it
+  Future<void> getImage(String userPhone) async{
+
+    File imageFile;
+
+
+      final result = await getImageRequest(userPhone: userPhone);
+      if (result != null) {
+        imageFile = result;
+        chats.firstWhere((element) => element.chatId == userPhone).image = imageFile;
+        onReceiveNewMessage!();
+      }
+  }
+
 }
