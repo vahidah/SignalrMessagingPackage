@@ -12,7 +12,6 @@ import 'dart:io';
 import 'package:signalr_core/signalr_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:tuple/tuple.dart';
 import 'dart:convert';
 
 import 'data_base/model_contact.dart';

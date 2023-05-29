@@ -1,3 +1,6 @@
+##1.0.2
+storage added to package
+
 ## 0.0.2
 
 * get contact list and their messages from server and some call back function added to be called after some operation.

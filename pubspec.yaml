@@ -3,7 +3,7 @@ description: ->
   Package hold and manage all data's and functions needed for Messaging between
   applications using signalr also send notif when it's needed consider this package is
   private and using it need to be connected to abmois company's servers.
-version: 0.0.2
+version: 1.0.1
 homepage: https://github.com/vahidah/SignalrMessagingPackage
 
 environment:
@@ -19,6 +19,12 @@ dependencies:
   objectbox: ^2.0.0
   shared_preferences: ^2.1.1
   objectbox_flutter_libs: any
+  path:
+  path_provider:
+  flat_buffers:
+  tuple:
+
+
 
 dev_dependencies:
   flutter_test:
