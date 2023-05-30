@@ -74,6 +74,8 @@ class SignalRMessaging {
 
   File? image;
 
+  Directory? directory;
+
 
   late ObjectBox _objectBox;
   late SharedPreferences sp;
@@ -182,7 +184,17 @@ class SignalRMessaging {
     final contacts = contactBox!.getAll();
     final groups = groupBox!.getAll();
 
-    Directory? directory = await getExternalStorageDirectory();
+    if(Platform.isAndroid){
+
+      directory = await getExternalStorageDirectory();
+
+    }else{
+
+      directory = await getExternalStorageDirectory();
+
+    }
+
+
 
     for (var contact in contacts) {
       String contactPhone = contact.phoneNumber!;
@@ -368,7 +380,7 @@ class SignalRMessaging {
 
     connection.invoke('Logout', args: [temporaryPhone]);
 
-    Directory? directory = await getExternalStorageDirectory();
+
 
       //can directory be null?
     directory?.list(recursive: true).listen((file) {
@@ -423,7 +435,7 @@ class SignalRMessaging {
     for(Chat element in chats){
       if(element.type == ChatType.contact) {
 
-        final result = await getImageRequest(element.chatId);
+        final result = await getImageRequest(element.chatId, directory!);
         if(result != null) {
 
           final query =
@@ -474,7 +486,7 @@ class SignalRMessaging {
         Contact contact = Contact(phoneNumber: message[0], userName: message[2]);
 
 
-        final result = await getImageRequest(message[0]);
+        final result = await getImageRequest(message[0], directory!);
 
 
         if(result != null){
@@ -531,9 +543,8 @@ class SignalRMessaging {
         if (response.statusCode == 200) {
           String imageType = response.headers["content-type"]!.split('/')[1];
           contact.imageType = imageType;
-          Directory? directory = await getExternalStorageDirectory();
           debugPrint("signalr-package: path is: ${path.join(directory!.path, "$userPhone.$imageType")}");
-          imageFile = File(path.join(directory.path, "$userPhone.$imageType"));
+          imageFile = File(path.join(directory!.path, "$userPhone.$imageType"));
           imageFile.writeAsBytes(response.bodyBytes);
 
           debugPrint("signalr-package:  headers are ${response.headers}");

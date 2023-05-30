@@ -9,7 +9,7 @@ import 'package:tuple/tuple.dart';
 
 import 'constants.dart';
 
-Future<Tuple2<String?, File?>?> getImageRequest(String userPhone) async {
+Future<Tuple2<String?, File?>?> getImageRequest(String userPhone, Directory directory) async {
   File? imageFile;
 
   try {
@@ -36,7 +36,7 @@ Future<Tuple2<String?, File?>?> getImageRequest(String userPhone) async {
     if (response.statusCode == 200) {
       String imageType = response.headers["content-type"]!.split('/')[1];
       // contact.imageType = imageType;
-      Directory? directory = await getExternalStorageDirectory();
+
       imageFile = File(path.join(directory!.path, "${userPhone}.${imageType}"));
       imageFile.writeAsBytes(response.bodyBytes);
 
@@ -61,7 +61,7 @@ Future<Tuple2<String?, File?>?> getImageRequest(String userPhone) async {
   }
 }
 
-Future<bool> uploadImage(String userPhone, File image) async {
+Future<bool> uploadImage(String userPhone, File image, ) async {
 
   try {
     BaseOptions options = BaseOptions(
